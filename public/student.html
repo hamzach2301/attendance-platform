@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Student Attendance Check-in</title>
+  <style>
+    :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#0b1220;color:#e6edf7;font-family:Inter,system-ui,Segoe UI,sans-serif;display:grid;place-items:center;padding:18px}.card{width:min(540px,100%);background:#111c2f;border:1px solid #22324a;border-radius:20px;box-shadow:0 10px 35px #0005;padding:26px}.eyebrow{color:#7fa2ff;font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em}h1{font-size:1.55rem;margin:8px 0}.muted{color:#9aabc2;line-height:1.5}.field{margin:18px 0}.field label{display:block;font-weight:650;margin-bottom:7px}input,select,button{font:inherit;border-radius:10px;padding:12px 14px;width:100%}input,select{border:1px solid #354762;background:#0c1628;color:#edf3ff}input::placeholder{color:#71839e}button{border:0;background:#4779f5;color:white;font-weight:700;cursor:pointer;margin-top:10px}button.secondary{background:#263752;color:#d9e5f8}.session{padding:11px 13px;background:#1a2b44;border-radius:10px;margin:16px 0;font-size:.92rem}.scanner{margin-top:14px;overflow:hidden;border-radius:12px}#reader{width:100%;border:0!important}#reader video{border-radius:12px}#reader__dashboard_section_csr button{width:auto!important;margin:4px!important}.notice{padding:12px;border-radius:10px;margin-top:14px;display:none}.notice.error{display:block;background:#451d2a;color:#ff9eaa}.notice.ok{display:block;background:#123b31;color:#70e0a8}.hint{font-size:.84rem;color:#9aabc2;margin-top:12px}.hidden{display:none!important}
+  </style>
+  <style>
+    button{transition:transform .12s ease,filter .12s ease,box-shadow .12s ease;box-shadow:0 2px 0 #0004}
+    button:hover:not(:disabled){filter:brightness(1.12);transform:translateY(-1px);box-shadow:0 4px 12px #0005}
+    button:active:not(:disabled){filter:brightness(.88);transform:translateY(1px) scale(.985);box-shadow:none}
+    button:focus-visible{outline:3px solid #9fc0ff;outline-offset:2px}
+    button:disabled{cursor:wait}
+    button.is-busy::after{content:"";display:inline-block;width:12px;height:12px;margin-left:8px;border:2px solid #ffffff66;border-top-color:#fff;border-radius:50%;vertical-align:-2px;animation:spin .7s linear infinite}
+    .checkin-actions{display:grid;gap:14px;margin-top:14px}
+    .checkin-actions button{margin-top:0}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="eyebrow">Class check-in</div><h1>Mark your attendance</h1>
+    <p class="muted">Connect to your teacher’s hotspot first. Scan the current QR code once with your phone’s camera or Google Scanner, then choose your section, enter your name, and submit.</p>
+    <div id="session" class="session">Checking for an active session…</div>
+    <div class="field"><label for="sectionName">Your section</label><input id="sectionName" list="knownSections" autocomplete="off" placeholder="Type your section (e.g. Section B)"><datalist id="knownSections"></datalist></div>
+    <div class="field"><label for="studentName">Full name</label><input id="studentName" autocomplete="name" placeholder="Enter your full name"></div>
+    <div class="checkin-actions">
+      <button id="submitButton" class="hidden">Submit participation</button>
+    </div>
+    <div id="notice" class="notice"></div>
+    <p class="hint">The QR changes every ten seconds. Your phone’s public network address must match the teacher’s hotspot. On iPhone, tap the link banner if Camera asks. A scanned link stays valid for two minutes while you open the form.</p>
+  </main>
+  <script>
+    const sessionBox=document.getElementById('session'),notice=document.getElementById('notice');
+    let submitting=false,checkinTicket=null;
+    let deviceFingerprint=localStorage.getItem('attendance-device-id');
+    if(!deviceFingerprint){deviceFingerprint=(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`);localStorage.setItem('attendance-device-id',deviceFingerprint);}
+    function message(text,kind='error'){notice.textContent=text;notice.className=`notice ${kind}`;}
+    async function claimForForm(token){try{const response=await fetch('/api/attendance/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dynamic_token:token,device_fingerprint:deviceFingerprint})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not open this check-in form.');checkinTicket=data.checkin_ticket;sessionBox.textContent=`Active session: ${data.section_name}`;document.getElementById('sectionName').value=data.section_name;document.getElementById('submitButton').classList.remove('hidden');document.getElementById('studentName').focus();message('QR accepted. Confirm your section, enter your full name, then submit.','ok');}catch(error){sessionBox.textContent='Could not verify the scanned class QR.';message(error.message);}}
+    async function submitAttendance(ticket){if(submitting)return;submitting=true;const button=document.getElementById('submitButton'),original=button.textContent;button.disabled=true;button.classList.add('is-busy');button.textContent='Submitting…';try{const fullName=document.getElementById('studentName').value.trim(),sectionName=document.getElementById('sectionName').value.trim();if(!fullName)throw new Error('Enter your full name.');if(!sectionName)throw new Error('Choose your section.');const response=await fetch('/api/attendance/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({full_name:fullName,section_name:sectionName,checkin_ticket:ticket,device_fingerprint:deviceFingerprint})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Check-in failed.');message(data.message,'ok');button.classList.remove('is-busy');button.textContent='Participation recorded ✓';}catch(error){message(error.message);button.disabled=false;button.classList.remove('is-busy');button.textContent=original;}finally{submitting=false;}}
+    document.getElementById('submitButton').onclick=()=>checkinTicket&&submitAttendance(checkinTicket);
+    const incomingToken=new URLSearchParams(location.search).get('token');if(incomingToken)claimForForm(incomingToken);else{sessionBox.textContent='No class QR code was found.';message('Scan your teacher’s QR code with your phone camera or Google Scanner to open this form.');}
+  </script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Professor Attendance Dashboard</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,system-ui,Segoe UI,sans-serif;color:#e6edf7;background:#0b1220}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1080px;margin:auto;padding:28px 18px}.top,.card,.modal{background:#111c2f;border:1px solid #22324a;border-radius:18px;box-shadow:0 10px 34px #0005}.top{padding:22px 26px;display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.top h1{font-size:1.3rem;margin:0 0 4px}.muted{color:#9aabc2;font-size:.92rem}.layout{display:grid;grid-template-columns:minmax(280px,1fr) 1.2fr;gap:18px}.card{padding:22px}.card h2{font-size:1.05rem;margin:0 0 16px}.qrbox{min-height:350px;display:grid;place-items:center;background:#0a1221;border:1px dashed #354762;border-radius:14px;padding:16px}.qrbox img{width:min(300px,100%);image-rendering:pixelated}.count{font-size:3rem;font-weight:750;line-height:1.1;margin:12px 0}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}button,input{font:inherit;border-radius:9px;padding:11px 13px}button{border:0;background:#4779f5;color:white;font-weight:650;cursor:pointer}button.secondary{background:#263752;color:#d9e5f8}button.danger{background:#b73548}button:disabled{opacity:.5;cursor:not-allowed}input{border:1px solid #354762;background:#0c1628;color:#edf3ff;min-width:0;width:100%}input::placeholder{color:#71839e}.field{margin:12px 0}.field label{display:block;font-size:.88rem;font-weight:650;margin-bottom:6px}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.status{padding:8px 11px;background:#263752;border-radius:99px;font-size:.84rem;color:#d9e5f8}.status.live{color:#70e0a8;background:#123b31}.list{padding:0;list-style:none;margin:10px 0 0;max-height:330px;overflow:auto}.list li{padding:9px 4px;border-bottom:1px solid #26364c;font-size:.92rem}.suggestions{border:1px solid #354762;background:#0c1628;border-radius:10px;margin-top:5px;overflow:hidden}.suggestions button{display:block;width:100%;background:#0c1628;color:#e6edf7;text-align:left;border-radius:0;border-bottom:1px solid #26364c;font-weight:500}.suggestions button:hover{background:#1a2b44}.hidden{display:none!important}.modal-backdrop{position:fixed;inset:0;background:#020617c9;display:grid;place-items:center;padding:16px}.modal{width:min(520px,100%);padding:24px}.notice{margin-top:12px;min-height:24px;color:#ff7d8b}.small{font-size:.82rem;color:#9aabc2}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:700px){.layout{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.wrap{padding:14px}}
+  </style>
+  <style>
+    button{transition:transform .12s ease,filter .12s ease,box-shadow .12s ease;box-shadow:0 2px 0 #0004}
+    button:hover:not(:disabled){filter:brightness(1.12);transform:translateY(-1px);box-shadow:0 4px 12px #0005}
+    button:active:not(:disabled){filter:brightness(.88);transform:translateY(1px) scale(.985);box-shadow:none}
+    button:focus-visible{outline:3px solid #9fc0ff;outline-offset:2px}
+    button:disabled{cursor:wait}
+    button.is-busy::after{content:"";display:inline-block;width:12px;height:12px;margin-left:8px;border:2px solid #ffffff66;border-top-color:#fff;border-radius:50%;vertical-align:-2px;animation:spin .7s linear infinite}
+    .list li{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .remove-attendance{width:auto;white-space:nowrap;font-size:.78rem;padding:7px 10px;margin:0}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section id="authPanel" class="card hidden"><h2 id="authTitle">Teacher sign in</h2><p class="muted">Create your own account to keep your sessions and attendance private.</p><form id="authForm"><div class="field"><label for="authUsername">Username</label><input id="authUsername" autocomplete="username" required minlength="3" maxlength="32"></div><div class="field hidden" id="emailField"><label for="authEmail">Report email</label><input id="authEmail" type="email" autocomplete="email"></div><div class="field hidden" id="signupCodeField"><label for="signupCode">Teacher signup code</label><input id="signupCode" autocomplete="off"></div><div class="field"><label for="authPassword">Password</label><input id="authPassword" type="password" autocomplete="current-password" required minlength="12"></div><button id="authSubmit" type="submit">Sign in</button></form><div id="authNotice" class="notice"></div><button class="secondary" id="authToggle" type="button">Create a teacher account</button></section>
+    <div id="appContent" class="hidden">
+    <header class="top"><div><h1>Attendance Dashboard</h1><div class="muted">Teacher: <span id="teacherName"></span> · sessions are private to your account</div></div><div class="row"><span id="connection" class="status">Connecting…</span><button class="secondary" id="logoutButton">Sign out</button></div></header>
+    <section id="noSession" class="card"><h2>No active session</h2><p class="muted">Choose an existing section or group, or type a new one. The session starts when you click Start session.</p><div class="row"><input id="sectionName" list="availableSections" autocomplete="off" placeholder="Choose or type a section/group"><datalist id="availableSections"></datalist><button id="startButton">Start session</button></div><div class="notice" id="startNotice"></div></section>
+    <div id="dashboard" class="layout hidden">
+      <section class="card"><div class="row" style="justify-content:space-between"><h2 id="sectionTitle">Section</h2><span class="status live">● ACTIVE</span></div><div id="qrbox" class="qrbox"><div class="muted">Waiting for next QR code…</div></div><div class="row" style="justify-content:space-between;margin-top:12px"><span class="small">QR rotates every 10 seconds; links stay valid for 2 minutes</span><span id="countdown" class="small"></span></div><p class="small">Students must connect to your mobile hotspot before scanning. Cloud check-ins are accepted only when their public IP matches the IP recorded when you started this session.</p><a id="studentLink" class="small" href="#" target="_blank" rel="noopener">Waiting for current student link…</a><div class="actions"><button id="manualButton" class="secondary">Add student without a phone</button><button id="downloadButton" class="secondary">Download attendance CSV</button><button id="closeButton" class="danger">End session &amp; send report</button></div><div id="closeNotice" class="notice"></div></section>
+      <section class="card"><h2>Live attendance</h2><div class="count" id="count">0</div><div class="muted">students present</div><ul class="list" id="attendees"></ul><div id="attendanceNotice" class="notice"></div></section>
+    </div>
+    </div>
+  </main>
+  <div class="modal-backdrop hidden" id="manualModal"><section class="modal"><h2>Manual attendance</h2><p class="muted">Add a student who could not scan. They will be added to the active section’s attendance list.</p><div class="field"><label for="manualName">Student full name</label><input id="manualName" autocomplete="off" placeholder="Enter full name"></div><div class="actions"><button id="markButton">Mark present manually</button><button id="cancelManual" class="secondary">Cancel</button></div><div id="manualNotice" class="notice"></div></section></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let registering = false;
+    let currentSession = null, socket = null, latestExpiry = 0, qrPollingTimer = null, summaryPollingTimer = null, lastQrToken = '';
+    async function api(url, options={}) {
+      const headers = { 'Content-Type':'application/json', ...(options.headers||{}) };
+      const response = await fetch(url, { ...options, headers });
+      const body = await response.json().catch(()=>({}));
+      if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+      return body;
+    }
+    async function withButtonFeedback(button, busyLabel, action) {
+      if(button.disabled) return;
+      const original=button.textContent;
+      button.disabled=true;button.classList.add('is-busy');button.textContent=busyLabel;
+      try{return await action();}finally{button.disabled=false;button.classList.remove('is-busy');button.textContent=original;}
+    }
+    function showSession(session) {
+      currentSession = session;
+      $('dashboard').classList.toggle('hidden', !session);
+      $('noSession').classList.toggle('hidden', !!session);
+      if (!session) { if(socket) socket.close(); socket=null; clearInterval(qrPollingTimer); clearInterval(summaryPollingTimer); qrPollingTimer=null; summaryPollingTimer=null; loadSectionChoices(); return; }
+      $('sectionTitle').textContent = session.section_name;
+      $('count').textContent = session.present_count || 0;
+      loadSummary().catch(()=>{}); connectSocket();
+      pollCurrentQr();
+      clearInterval(qrPollingTimer); qrPollingTimer=setInterval(pollCurrentQr,1000);
+      clearInterval(summaryPollingTimer); summaryPollingTimer=setInterval(()=>loadSummary().catch(()=>{}),4000);
+    }
+    async function pollCurrentQr() {
+      if(!currentSession) return;
+      try {
+        const data=await api('/api/qr/current');
+        if(!currentSession || data.sessionId!==currentSession.session_id) return;
+        if(lastQrToken!==data.token){$('qrbox').innerHTML=`<img alt="Rotating attendance QR code" src="${data.qrDataUrl}">`;lastQrToken=data.token;}
+        $('studentLink').href=data.studentUrl;$('studentLink').textContent=data.studentUrl;latestExpiry=data.expiresAt;
+        if(!socket || socket.readyState!==WebSocket.OPEN){$('connection').textContent='QR ready · HTTP fallback';$('connection').classList.add('live');}
+      } catch(e) {
+        $('connection').textContent=e.message.toLowerCase().includes('sign in')?'Sign in required':'Server unavailable';
+        $('connection').classList.remove('live');
+      }
+    }
+    async function loadSummary() {
+      if(!currentSession) return;
+      const data = await api(`/api/attendance/summary?session_id=${encodeURIComponent(currentSession.session_id)}`);
+      $('count').textContent = data.present_count;
+      $('attendees').innerHTML = data.records.map((r)=>`<li><span><strong>${escapeHtml(r.full_name)}</strong> <span class="small">${r.checkin_method}</span></span><button type="button" class="danger remove-attendance" data-record-id="${r.record_id}">Remove</button></li>`).join('');
+      for(const button of $('attendees').querySelectorAll('.remove-attendance'))button.onclick=()=>withButtonFeedback(button,'Removing…',async()=>{const name=button.closest('li').querySelector('strong').textContent;if(!confirm(`Remove ${name} from this session’s attendance?`))return;try{const result=await api(`/api/attendance/${button.dataset.recordId}`,{method:'DELETE'});$('attendanceNotice').textContent=`${result.full_name} removed. ${result.present_count} students remain present.`;await loadSummary();}catch(e){$('attendanceNotice').textContent=e.message;}});
+    }
+    function connectSocket() {
+      if(socket) socket.close();
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      socket = new WebSocket(`${protocol}//${location.host}/ws/qr`);
+      socket.onopen = () => { $('connection').textContent='Connected'; $('connection').classList.add('live'); };
+      socket.onclose = () => { if(currentSession){$('connection').textContent='QR ready · HTTP fallback';$('connection').classList.add('live');setTimeout(connectSocket, 5000);}else{$('connection').textContent='Disconnected';$('connection').classList.remove('live');} };
+      socket.onerror = () => $('connection').textContent='Connection issue';
+      socket.onmessage = (event) => {
+        const data=JSON.parse(event.data);
+        if(data.type==='state' && data.session && (!currentSession || currentSession.session_id!==data.session.session_id)) showSession(data.session);
+        if(data.type==='qr' && currentSession && data.sessionId===currentSession.session_id) { $('qrbox').innerHTML=`<img alt="Rotating attendance QR code" src="${data.qrDataUrl}">`; $('studentLink').href=data.studentUrl; $('studentLink').textContent=data.studentUrl; latestExpiry=data.expiresAt; }
+        if(data.type==='attendance' && currentSession && data.sessionId===currentSession.session_id) { $('count').textContent=data.present_count; loadSummary().catch(()=>{}); }
+        if(data.type==='closed' && currentSession && data.sessionId===currentSession.session_id) { showSession(null); }
+      };
+    }
+    function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+    async function loadSectionChoices(){try{const data=await fetch('/api/sections').then(r=>r.json());$('availableSections').innerHTML=data.sections.map(section=>`<option value="${escapeHtml(section)}"></option>`).join('');}catch{}}
+    $('authToggle').onclick=()=>{registering=!registering;$('authTitle').textContent=registering?'Create teacher account':'Teacher sign in';$('authSubmit').textContent=registering?'Create account':'Sign in';$('authToggle').textContent=registering?'I already have an account':'Create a teacher account';$('emailField').classList.toggle('hidden',!registering);$('signupCodeField').classList.toggle('hidden',!registering);$('authPassword').autocomplete=registering?'new-password':'current-password';$('authPassword').minLength=registering?12:1;$('authNotice').textContent='';};
+    $('authForm').onsubmit=async(event)=>{event.preventDefault();const button=$('authSubmit');await withButtonFeedback(button,registering?'Creating…':'Signing in…',async()=>{try{const data=await api(`/api/auth/${registering?'register':'login'}`,{method:'POST',body:JSON.stringify({username:$('authUsername').value,email:$('authEmail').value,password:$('authPassword').value,signup_code:$('signupCode').value})});$('authPanel').classList.add('hidden');$('appContent').classList.remove('hidden');await openDashboard(data.teacher);}catch(e){$('authNotice').textContent=e.message;}});};
+    async function openDashboard(teacher){$('teacherName').textContent=teacher.username;$('connection').textContent='Connected';$('connection').classList.add('live');const d=await api('/api/session/active');if(d.session){showSession(d.session);return;}$('sectionName').value=localStorage.getItem(`attendance-last-section-${teacher.teacher_id}`)||'';showSession(null);}
+    $('logoutButton').onclick=()=>withButtonFeedback($('logoutButton'),'Signing out…',async()=>{try{await api('/api/auth/logout',{method:'POST'});}finally{if(socket)socket.close();location.reload();}});
+    $('startButton').onclick=()=>withButtonFeedback($('startButton'),'Starting…',async()=>{try{const section=$('sectionName').value.trim();if(!section)throw new Error('Choose or type a section/group first.');const d=await api('/api/session/start',{method:'POST',body:JSON.stringify({section_name:section})});localStorage.setItem(`attendance-last-section-${d.session.teacher_id||''}`,section);$('startNotice').textContent='Session started.';showSession(d.session);}catch(e){$('startNotice').textContent=e.message;}});
+    $('manualButton').onclick=()=>{$('manualNotice').textContent='';$('manualModal').classList.remove('hidden');$('manualName').focus();};
+    $('cancelManual').onclick=()=>{$('manualModal').classList.add('hidden');$('manualName').value='';};
+    $('markButton').onclick=()=>withButtonFeedback($('markButton'),'Marking…',async()=>{try{const d=await api('/api/attendance/manual',{method:'POST',body:JSON.stringify({session_id:currentSession.session_id,full_name:$('manualName').value})});$('manualNotice').textContent=`Marked ${d.student.full_name} present.`;$('count').textContent=d.present_count;$('manualModal').classList.add('hidden');$('manualName').value='';await loadSummary();}catch(e){$('manualNotice').textContent=e.message;}});
+    $('downloadButton').onclick=()=>withButtonFeedback($('downloadButton'),'Preparing…',async()=>{try{const d=await api(`/api/attendance/summary?session_id=${encodeURIComponent(currentSession.session_id)}`);const quote=(v)=>`"${String(v??'').replace(/"/g,'""')}"`;const csv=['Full Name,Timestamp,Method',...d.records.map(r=>[r.full_name,r.timestamp,r.checkin_method].map(quote).join(','))].join('\r\n');const url=URL.createObjectURL(new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`Attendance_${currentSession.section_name.replace(/[^a-z0-9_-]+/gi,'_')}_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);}catch(e){$('closeNotice').textContent=e.message;}});
+    $('closeButton').onclick=()=>withButtonFeedback($('closeButton'),'Ending…',async()=>{if(!currentSession||!confirm('End this session and queue the attendance report email?'))return;try{const d=await api('/api/session/close',{method:'POST',body:JSON.stringify({session_id:currentSession.session_id})});$('closeNotice').textContent=`Session completed. Email status: ${d.email_status}.`;showSession(null);}catch(e){$('closeNotice').textContent=e.message;}});
+    setInterval(()=>{if(latestExpiry){const left=Math.max(0,latestExpiry-Date.now());$('countdown').textContent=left?`Refreshes in ${(left/1000).toFixed(1)}s`:'';}},150);
+    (async()=>{try{const data=await api('/api/auth/me');$('authPanel').classList.add('hidden');$('appContent').classList.remove('hidden');await openDashboard(data.teacher);}catch{$('authPanel').classList.remove('hidden');}})();
+  </script>
+</body>
+</html>
