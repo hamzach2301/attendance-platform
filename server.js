@@ -44,8 +44,9 @@ const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const REQUIRE_HOTSPOT_IP_MATCH = process.env.REQUIRE_HOTSPOT_IP_MATCH === undefined
   ? process.env.NODE_ENV === 'production'
   : process.env.REQUIRE_HOTSPOT_IP_MATCH !== 'false';
-// 0 for a direct VPS. Render places a single trusted proxy before this app, so
-// use 1 there. Incorrect values can make forwarded IP headers spoofable.
+// 0 for a direct VPS. On Render, the platform identifies itself with RENDER
+// and its documented client header is used below. For another proxy, set this
+// to the exact number of trusted hops; incorrect values can trust spoofed IPs.
 const TRUST_PROXY_HOPS = Number.parseInt(process.env.TRUST_PROXY_HOPS || '0', 10);
 if (!Number.isInteger(TRUST_PROXY_HOPS) || TRUST_PROXY_HOPS < 0 || TRUST_PROXY_HOPS > 10) {
   throw new Error('TRUST_PROXY_HOPS must be an integer from 0 to 10.');
@@ -226,8 +227,14 @@ function forwardedIps(req) {
 }
 function extractClientIp(req) {
   const socketIp = normalizeIp(req.socket?.remoteAddress || req.connection?.remoteAddress);
-  if (TRUST_PROXY_HOPS === 0) return socketIp;
   const forwarded = forwardedIps(req);
+  // Render sanitizes X-Forwarded-For and places the public client IP first.
+  // Its request path can contain more than one internal proxy, so using the
+  // rightmost entry here would incorrectly select a private Render address.
+  if (process.env.RENDER === 'true') {
+    return forwarded[0] || normalizeIp(req.headers['x-real-ip']) || socketIp;
+  }
+  if (TRUST_PROXY_HOPS === 0) return socketIp;
   const forwardedIndex = forwarded.length - TRUST_PROXY_HOPS;
   if (forwardedIndex >= 0 && forwarded[forwardedIndex]) return forwarded[forwardedIndex];
   return normalizeIp(req.headers['x-real-ip']) || socketIp;

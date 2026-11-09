@@ -126,4 +126,4 @@ With `REQUIRE_HOTSPOT_IP_MATCH=true`, the server saves the teacher hotspot’s p
 
 It is an extra control, not proof that someone is physically in the room. Hotspot carriers can change public IPs, IPv6/mobile networks can expose different addresses, and another device already connected to the hotspot can still check in. QR rotation, short ticket expiry, and teacher review of the live list remain important.
 
-`TRUST_PROXY_HOPS=1` is required on Render because it supplies the original client IP through a proxy. Set it to `0` for a direct custom VPS. Incorrect proxy settings can make forwarded-IP headers unreliable; see [Express guidance](https://expressjs.com/en/guide/behind-proxies/).
+On Render, the app uses Render's documented first `X-Forwarded-For` value for the public client address. Set `TRUST_PROXY_HOPS=0` for a direct custom VPS. For another proxy, set it to the exact number of trusted hops. Incorrect proxy settings can make forwarded-IP headers unreliable; see [Express guidance](https://expressjs.com/en/guide/behind-proxies/).
