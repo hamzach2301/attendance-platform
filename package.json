@@ -2,7 +2,7 @@
   "name": "local-attendance-system",
   "version": "1.0.0",
   "private": true,
-  "description": "Multi-teacher QR attendance platform with SQLite persistence",
+  "description": "Multi-teacher QR attendance platform with Supabase PostgreSQL persistence",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,9 +11,9 @@
     "node": ">=20"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
     "express": "^5.1.0",
     "nodemailer": "^7.0.5",
+    "pg": "^8.16.3",
     "qrcode": "^1.5.4",
     "ws": "^8.18.3"
   }

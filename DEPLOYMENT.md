@@ -1,39 +1,129 @@
-# Multi-teacher attendance app: setup and deployment
+# Deploying the attendance platform for free
 
-## Local setup
+This version uses **Supabase PostgreSQL** for persistent data and a **Render Free Web Service** for the Express server. The database keeps teacher accounts, sessions, attendance lists, and queued email reports even when Render restarts or sleeps.
 
-1. In PowerShell, open the project folder and install the dependencies with `npm.cmd ci` (or `npm install` if the lock file needs updating).
-2. Copy `.env.example` to `.env` and set a private `AUTH_SECRET`. Generate one with:
+## What changed from the local SQLite version
+
+The server now requires `DATABASE_URL`. It creates the PostgreSQL tables automatically the first time it connects. Existing local `attendance.sqlite` data remains on the laptop as a backup; it is not uploaded to Supabase. The first cloud teacher account starts with a fresh cloud database.
+
+## 1. Create the Supabase database
+
+1. Create an account at [Supabase](https://supabase.com/dashboard), then choose **New project**.
+2. Give it a project name such as `attendance-platform`, create a strong database password, and save that password somewhere private.
+3. Wait until the project status shows it is ready.
+4. In the project dashboard, select **Connect**.
+5. Choose **Session pooler** and copy the connection string. This is the best choice for a long-running Render Express service with an IPv4 connection.
+6. Replace `[YOUR-PASSWORD]` with your database password. If the password contains characters like `@`, `#`, `?`, `&`, or spaces, encode them before pasting them in the URL.
+
+Do not put the Supabase connection string in GitHub, screenshots, or chat messages. It grants direct database access.
+
+## 2. Test locally with Supabase
+
+1. In PowerShell, open the project:
+
+   ```powershell
+   cd "C:\Users\Hamzach\OneDrive\Documents\project"
+   ```
+
+2. Update the private `.env` file. Remove the old `DB_PATH` line and add your private database URL:
+
+   ```text
+   DATABASE_URL=postgresql://...your-supabase-session-pooler-URL...
+   DATABASE_SSL=true
+   ```
+
+3. Keep the following while testing from the laptop:
+
+   ```text
+   REQUIRE_HOTSPOT_IP_MATCH=false
+   TRUST_PROXY_HOPS=0
+   ```
+
+4. Install the changed dependencies and start the server:
+
+   ```powershell
+   npm.cmd install
+   npm.cmd start
+   ```
+
+5. Open `http://localhost:3000/professor`, create a teacher account, start a test session, and complete a check-in. Tables are created automatically in Supabase.
+
+## 3. Push the PostgreSQL changes to GitHub
+
+Check that your database URL and local attendance files are still ignored:
+
+```powershell
+git status
+```
+
+It must not show `.env`, `attendance.sqlite`, `attendance.sqlite-wal`, or `attendance.sqlite-shm`.
+
+Then commit and push the conversion:
+
+```powershell
+git add server.js package.json package-lock.json .env.example DEPLOYMENT.md public
+git commit -m "Use Supabase PostgreSQL for cloud persistence"
+git push
+```
+
+## 4. Deploy the Express server on Render Free
+
+1. Go to [Render](https://render.com), sign in with GitHub, and choose **New → Web Service**.
+2. Select `hamzach2301/attendance-platform` and configure it:
+
+   | Field | Value |
+   | --- | --- |
+   | Language | Node |
+   | Branch | `main` |
+   | Build Command | `npm ci` |
+   | Start Command | `npm start` |
+   | Instance type | Free |
+
+3. Do **not** add a persistent disk. Supabase stores the data.
+4. In **Environment**, add these values:
+
+   ```text
+   NODE_ENV=production
+   DATABASE_URL=your-private-Supabase-session-pooler-connection-string
+   DATABASE_SSL=true
+   REQUIRE_HOTSPOT_IP_MATCH=true
+   TRUST_PROXY_HOPS=1
+   AUTH_SECRET=a-long-random-secret
+   TEACHER_SIGNUP_CODE=your-private-teacher-signup-code
+   ```
+
+5. Generate `AUTH_SECRET` in PowerShell:
 
    ```powershell
    node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
    ```
 
-3. Start the app with `npm.cmd start`, then open `http://localhost:3000/professor`.
-4. Create a teacher account with a username, a password of at least 12 characters, and the email address that should receive that teacher's reports. The first teacher account created against an existing database adopts its unowned legacy records.
-5. To run from a phone hotspot, keep `HOST=0.0.0.0`, allow Node.js through Windows Firewall on the private network, and share the Wi-Fi address shown in the QR code.
+6. Click **Create Web Service**. After it is live, copy its address, for example `https://attendance-platform.onrender.com`.
+7. Return to **Environment**, add this final variable, and choose **Save and deploy**:
 
-The app reads simple `KEY=value` entries from `.env` at startup. `.env` and the SQLite database are ignored by Git; commit `.env.example` only.
+   ```text
+   PUBLIC_URL=https://attendance-platform.onrender.com
+   ```
 
-## Deploying on Render with a persistent disk
+## 5. Check the cloud service
 
-1. This project folder currently has no Git repository. From PowerShell in the project folder, run `git init`, then `git add server.js public package.json package-lock.json .gitignore .env.example DEPLOYMENT.md`, `git status`, and `git commit -m "Prepare attendance app for deployment"`. Confirm `.env` and SQLite files are absent before pushing to GitHub. If any database or secret was committed previously, remove it from Git history and rotate the exposed credentials.
-2. Create a Render **Web Service** from the repository. Use `npm ci` as the build command and `npm start` as the start command. Select a Node runtime compatible with the project dependencies (Node 20 or newer).
-3. Choose a paid web service plan and add a persistent disk mounted at `/var/data`. Render's [free web services do not support persistent disks](https://render.com/docs/free). Set `DB_PATH=/var/data/attendance.sqlite` in the service environment. The app creates the database directory if it does not exist. Only files under the disk mount path persist across restarts and deploys ([Render disk documentation](https://render.com/docs/disks)).
-4. Add `NODE_ENV=production`, a long random `AUTH_SECRET`, `PUBLIC_URL=https://your-service.onrender.com`, `REQUIRE_HOTSPOT_IP_MATCH=true`, `TRUST_PROXY_HOPS=1`, and your SMTP variables in Render's environment settings. If signups should be restricted, set `TEACHER_SIGNUP_CODE` and give it only to teachers you authorize.
-5. Deploy, then open `https://your-service.onrender.com/professor`. Each teacher creates an account; sessions, section history, students, and attendance rows are filtered by that account. Session reports go to the email address saved on that teacher account.
-6. Back up the SQLite file from the persistent disk regularly. If the app already contains data, copy the SQLite database and its WAL/SHM files while the server is stopped to the mounted disk before the first cloud start. Alternatively, export reports and start with a fresh persistent database.
+1. Open `https://YOUR-RENDER-URL/professor`.
+2. Create the first teacher account with the private signup code.
+3. Connect the teacher laptop to the teacher’s mobile hotspot.
+4. Start the session **after connecting to the hotspot**.
+5. Connect a student phone to that same hotspot, scan the QR code, and check in.
+6. Turn Wi-Fi off on another phone and use mobile data. The app should reject its check-in with: `You must be connected to the teacher's hotspot to check in.`
 
-Keep this service at one running instance when using SQLite. Render also restricts a service with a persistent disk to one instance ([scaling limits](https://render.com/docs/scaling)). SQLite is a single-file database and this app keeps rotating QR tokens and check-in tickets in process memory; multiple app instances need shared storage and shared token/session state or a database designed for that deployment model.
+## Free-plan limits
 
-## Offline and cloud behavior
+Render Free services sleep after 15 minutes without incoming traffic. The first request after sleep can take several seconds while it wakes up, so open the professor page a few minutes before class. Supabase Free may pause a project that has little activity for about a week; the Supabase dashboard sends warning email before pausing it, and you can resume it.
 
-Cloud hosting gives teachers a shared internet URL, but student phones need internet access to reach it. The local Wi-Fi hotspot workflow still works when the professor runs the app on the laptop on that same network. For attendance during an internet outage, use the local laptop server and its local SQLite file; cloud-hosted SQLite cannot provide an offline fallback automatically.
+The actual provider behavior is documented by [Render’s Free Web Service guide](https://render.com/docs/your-first-deploy), [Render’s WebSocket update](https://render.com/changelog/free-web-services-now-remain-active-while-receiving-websocket-messages), [Supabase connection guidance](https://supabase.com/docs/guides/database/connecting-to-postgres), and [Supabase free-project pausing](https://supabase.com/docs/guides/platform/free-project-pausing).
 
-## Hotspot IP matching
+## Hotspot IP matching limits
 
-When `REQUIRE_HOTSPOT_IP_MATCH=true`, the app stores the public IP address that reaches the cloud service when a teacher starts a session. Every QR claim and attendance submission must arrive from the same address. This prevents a forwarded QR URL from checking in through another mobile or home network.
+With `REQUIRE_HOTSPOT_IP_MATCH=true`, the server saves the teacher hotspot’s public IP when the session begins. A QR claim and attendance submission must arrive from the same public IP. This rejects a QR link opened via an unrelated home network or mobile data connection.
 
-Use a cloud deployment for this feature: a phone hotspot normally translates the laptop and connected student phones through the hotspot's shared public address. It cannot be used as a physical-presence guarantee. A hotspot provider can change its public IP during a session, some IPv6/mobile networks can expose different addresses per device, and students sharing the same external network can still check in. Keep the QR rotation, short claim lifetime, and teacher review of the live list enabled.
+It is an extra control, not proof that someone is physically in the room. Hotspot carriers can change public IPs, IPv6/mobile networks can expose different addresses, and another device already connected to the hotspot can still check in. QR rotation, short ticket expiry, and teacher review of the live list remain important.
 
-`TRUST_PROXY_HOPS` determines when the app trusts `X-Forwarded-For`/`X-Real-IP`. Set `0` for a direct VPS. Set `1` only when your hosting provider is the sole reverse proxy and it overwrites forwarding headers. Render sends the client address in `X-Forwarded-For`; Express warns that an incorrect proxy-trust setting permits spoofed headers. See [Render's proxy guidance](https://render.com/articles/how-render-handles-ddos-attacks) and [Express behind proxies](https://expressjs.com/en/guide/behind-proxies/).
+`TRUST_PROXY_HOPS=1` is required on Render because it supplies the original client IP through a proxy. Set it to `0` for a direct custom VPS. Incorrect proxy settings can make forwarded-IP headers unreliable; see [Express guidance](https://expressjs.com/en/guide/behind-proxies/).
